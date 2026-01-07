@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>L5-L6 英語口說挑戰站 - 最終部署版</title>
+    <title>L5-L6 英語口說挑戰站 - Kiosk 專業版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600&display=swap');
@@ -15,6 +15,7 @@
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             min-height: 100vh;
             padding-bottom: env(safe-area-inset-bottom);
+            overflow-x: hidden;
         }
         .glass-card {
             background: rgba(255, 255, 255, 0.9);
@@ -30,8 +31,27 @@
         }
         .modal-overlay { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
         .unit-tab-active { background-color: #4f46e5; color: white; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
-        input { font-size: 16px !important; }
         
+        /* 自定義按鈕樣式 */
+        .key-btn {
+            background-color: #f1f5f9;
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #334155;
+            transition: all 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .key-btn:active {
+            background-color: #e2e8f0;
+            transform: scale(0.95);
+        }
+
         #connection-error-banner {
             display: none;
             background-color: #ef4444;
@@ -54,15 +74,36 @@
         ⚠️ 雲端連線失敗：請確認已替換 Firebase Config 且網路未封鎖 Google 服務。
     </div>
 
-    <!-- 登入視窗 -->
+    <!-- 登入視窗與自定義數字鍵盤 -->
     <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
-        <div class="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl text-center">
-            <h2 class="text-2xl font-bold text-slate-800 mb-2">🗣️ 段考口說挑戰站</h2>
-            <p class="text-slate-500 mb-6">請輸入座號開始複習 L5-L6</p>
-            <input type="number" id="student-id-input" pattern="\d*" inputmode="numeric" placeholder="例如：05" 
-                   class="w-full border-2 border-slate-200 rounded-xl px-4 py-3 mb-2 text-center text-xl focus:border-indigo-500 outline-none">
+        <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl text-center">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">🗣️ 段考口說挑戰</h2>
+            <p class="text-slate-500 mb-4">請輸入座號開始挑戰</p>
+            
+            <!-- 唯讀輸入框，防止彈出系統鍵盤 -->
+            <div id="id-display" class="w-full bg-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 mb-4 text-center text-3xl font-bold text-indigo-600 h-16 flex items-center justify-center">
+                
+            </div>
+            
+            <!-- 數字按鈕網格 -->
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <button onclick="pressKey('1')" class="key-btn">1</button>
+                <button onclick="pressKey('2')" class="key-btn">2</button>
+                <button onclick="pressKey('3')" class="key-btn">3</button>
+                <button onclick="pressKey('4')" class="key-btn">4</button>
+                <button onclick="pressKey('5')" class="key-btn">5</button>
+                <button onclick="pressKey('6')" class="key-btn">6</button>
+                <button onclick="pressKey('7')" class="key-btn">7</button>
+                <button onclick="pressKey('8')" class="key-btn">8</button>
+                <button onclick="pressKey('9')" class="key-btn">9</button>
+                <button onclick="pressKey('clear')" class="key-btn text-red-500 text-sm">清除</button>
+                <button onclick="pressKey('0')" class="key-btn">0</button>
+                <button onclick="pressKey('back')" class="key-btn text-orange-500">⌫</button>
+            </div>
+
             <p id="login-error" class="text-red-500 text-sm mb-4 hidden font-bold">查無此人，請重新輸入</p>
-            <button id="login-btn" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-indigo-700 transition-all text-lg mb-3">
+            
+            <button id="login-btn" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-indigo-700 transition-all text-lg mb-3 shadow-lg">
                 登入系統
             </button>
             <button onclick="toggleFullScreen()" class="text-slate-400 text-xs hover:underline">🖥️ 切換全螢幕模式</button>
@@ -81,28 +122,42 @@
     </div>
 
     <div class="max-w-md mx-auto">
-        <header class="flex justify-between items-center mb-6">
+        <!-- 頁首資訊 -->
+        <header class="flex justify-between items-start mb-6">
             <div>
                 <h1 class="text-xl font-bold text-slate-800">段考複習站</h1>
-                <p class="text-slate-600 text-sm">座號: <span id="display-student-id" class="font-bold text-indigo-600">-</span> <span id="display-student-name" class="ml-1 text-slate-500"></span></p>
-                <p class="text-slate-600 text-sm">總分: <span id="display-score" class="font-bold text-green-600">0</span></p>
+                <div class="flex items-center mt-1">
+                    <span id="display-student-id" class="font-bold text-indigo-600"></span>
+                    <span id="display-student-name" class="ml-2 text-slate-500 font-bold"></span>
+                </div>
+                <p class="text-slate-600 text-sm mt-1">總積分: <span id="display-score" class="font-bold text-green-600">0</span></p>
             </div>
-            <button onclick="toggleLeaderboard(true)" class="bg-white p-3 rounded-2xl shadow-sm hover:shadow-md transition-all text-2xl">🏆</button>
+            <div class="flex space-x-2">
+                <button onclick="toggleLeaderboard(true)" class="bg-white p-3 rounded-2xl shadow-sm hover:shadow-md transition-all text-2xl">🏆</button>
+                <button onclick="logout()" class="bg-slate-100 p-3 rounded-2xl shadow-sm hover:bg-red-50 text-slate-500 flex flex-col items-center justify-center">
+                    <span class="text-xs font-bold leading-none">換人</span>
+                    <span class="text-[10px]">Challenge</span>
+                </button>
+            </div>
         </header>
 
+        <!-- 單元切換 -->
         <div class="flex p-1 bg-slate-200 rounded-2xl mb-6">
             <button onclick="switchLesson(5)" id="tab-l5" class="flex-1 py-2 rounded-xl font-bold transition-all text-slate-600">Lesson 5</button>
             <button onclick="switchLesson(6)" id="tab-l6" class="flex-1 py-2 rounded-xl font-bold transition-all unit-tab-active">Lesson 6</button>
         </div>
 
+        <!-- Part 切換 -->
         <div class="flex space-x-2 mb-6" id="part-tabs">
             <button onclick="switchPart(1)" id="btn-part1" class="flex-1 py-3 rounded-xl font-bold transition-all bg-indigo-600 text-white shadow-lg">Part 1</button>
             <button onclick="switchPart(2)" id="btn-part2" class="flex-1 py-3 rounded-xl font-bold transition-all bg-white text-slate-600">Part 2</button>
             <button onclick="switchPart(3)" id="btn-part3" class="flex-1 py-3 rounded-xl font-bold transition-all bg-white text-slate-600">Part 3</button>
         </div>
 
+        <!-- 句子清單 -->
         <div id="content-area" class="space-y-4 pb-12"></div>
 
+        <!-- 浮動提示 -->
         <div id="feedback-toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm p-5 rounded-3xl hidden shadow-2xl text-center z-[100] transform transition-all">
             <p id="feedback-text" class="text-xl font-bold"></p>
             <p id="transcript-text" class="text-sm opacity-90 mt-1"></p>
@@ -183,6 +238,36 @@
             }
         };
 
+        // --- 數字鍵盤功能 ---
+        let inputId = "";
+        window.pressKey = (key) => {
+            const display = document.getElementById('id-display');
+            if (key === 'back') {
+                inputId = inputId.slice(0, -1);
+            } else if (key === 'clear') {
+                inputId = "";
+            } else {
+                if (inputId.length < 2) { // 假設座號最多兩位
+                    inputId += key;
+                }
+            }
+            display.innerText = inputId;
+        };
+
+        // --- 換人挑戰 (登出) ---
+        window.logout = () => {
+            inputId = "";
+            studentId = "";
+            masteredSentences = [];
+            currentScore = 0;
+            document.getElementById('id-display').innerText = "";
+            document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('display-student-id').innerText = "";
+            document.getElementById('display-student-name').innerText = "";
+            document.getElementById('display-score').innerText = "0";
+            document.getElementById('content-area').innerHTML = "";
+        };
+
         async function signInWithRetry(retries = 5) {
             if (isPlaceholder) return null;
             for (let i = 0; i < retries; i++) {
@@ -218,12 +303,17 @@
 
         async function login() {
             if (!currentUser) return;
-            const input = document.getElementById('student-id-input').value;
-            const id = parseInt(input, 10).toString();
-            if (!studentList[id]) { document.getElementById('login-error').classList.remove('hidden'); return; }
+            if (!inputId) return;
+            
+            const id = parseInt(inputId, 10).toString();
+            if (!studentList[id]) { 
+                document.getElementById('login-error').classList.remove('hidden'); 
+                return; 
+            }
+            
             document.getElementById('login-error').classList.add('hidden');
             studentId = id;
-            document.getElementById('display-student-id').innerText = studentId;
+            document.getElementById('display-student-id').innerText = "座號: " + studentId;
             document.getElementById('display-student-name').innerText = studentList[id];
             
             const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'leaderboard', studentId);
@@ -317,7 +407,7 @@
             onSnapshot(q, (snapshot) => {
                 const players = [];
                 snapshot.forEach(doc => players.push(doc.data()));
-                players.sort((a, b) => b.score - a.score || parseInt(a.studentId) - parseInt(b.studentId));
+                players.sort((a, b) => (b.score || 0) - (a.score || 0) || parseInt(a.studentId) - parseInt(b.studentId));
                 const list = document.getElementById('leaderboard-list');
                 list.innerHTML = players.map((p, i) => `
                     <div class="flex items-center justify-between p-4 rounded-2xl ${p.studentId === studentId ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-700'}">
