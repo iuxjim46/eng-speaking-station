@@ -54,6 +54,11 @@
         .recording-pulse { animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
         .modal-overlay { background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+        
+        /* 音速按鈕樣式 */
+        .speed-btn {
+            @apply flex items-center justify-center space-x-1 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-500 shadow-sm transition-all active:scale-90;
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -127,6 +132,7 @@
 
         <div id="content-area" class="space-y-4 pb-20"></div>
 
+        <!-- 辨識回饋 Toast -->
         <div id="feedback-toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm p-5 rounded-3xl hidden shadow-2xl text-center z-[100] transform transition-all">
             <p id="feedback-text" class="text-xl font-bold"></p>
             <div id="word-comparison" class="text-sm mt-2 flex flex-wrap justify-center gap-1"></div>
@@ -162,7 +168,7 @@
         };
 
         let currentUser = null, studentId = "", currentScore = 0;
-        let masteredMap = {}; // 改用物件儲存每題分數 { "l5-p1-1": 10 }
+        let masteredMap = {}; 
         let currentLesson = 6, currentPart = 1, isRecording = false;
 
         const sentencesData = {
@@ -244,6 +250,19 @@
 
         window.logout = () => { location.reload(); };
 
+        // --- 發音功能 (TTS) ---
+        window.playPronunciation = (text, speed) => {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = speed; // 動態設定音速
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert("抱歉，您的設備不支援發音功能。");
+            }
+        };
+
         // --- 口說核心邏輯 ---
         function clean(s) { return s.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g,"").split(/\s+/).filter(x => x.length > 0); }
 
@@ -263,7 +282,6 @@
                 const targetWords = clean(targetText);
                 const saidWords = clean(saidText);
                 
-                // 計算對了幾個單字
                 let correctCount = 0;
                 const comparisonDiv = document.getElementById('word-comparison');
                 comparisonDiv.innerHTML = "";
@@ -281,9 +299,8 @@
                 });
 
                 const accuracy = correctCount / targetWords.length;
-                const scoreThisTime = Math.round(accuracy * 10); // 一題滿分 10 分
+                const scoreThisTime = Math.round(accuracy * 10); 
                 
-                // 只有更高分才更新資料庫
                 const previousBest = masteredMap[id] || 0;
                 if (scoreThisTime > previousBest) {
                     masteredMap[id] = scoreThisTime;
@@ -321,19 +338,34 @@
                 const score = masteredMap[item.id] || 0;
                 const card = document.createElement('div');
                 card.className = `glass-card p-5 border-2 transition-all ${score >= 5 ? 'border-green-200 bg-green-50/50' : 'border-transparent'}`;
+                
+                // 處理轉義單引號以防 JS 報錯
+                const safeEn = item.en.replace(/'/g, "\\'");
+                
                 card.innerHTML = `
                     <div class="flex justify-between items-start mb-2">
                         <div class="flex-1">
                             <p class="text-lg font-bold text-slate-800">${item.en}</p>
                             <p class="text-xs text-slate-400 font-bold">${item.zh}</p>
                         </div>
-                        <div class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">
-                            Best: ${score}/10
+                        <div class="flex flex-col items-end space-y-2">
+                            <div class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">
+                                Best: ${score}/10
+                            </div>
+                            <!-- 音速按鈕區 -->
+                            <div class="flex space-x-1">
+                                <button onclick="playPronunciation('${safeEn}', 1.0)" class="speed-btn">
+                                    📢 <span class="ml-0.5">正常</span>
+                                </button>
+                                <button onclick="playPronunciation('${safeEn}', 0.6)" class="speed-btn">
+                                    🐢 <span class="ml-0.5">慢速</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <button onclick="handleStartSpeaking('${item.id}', '${item.en.replace(/'/g, "\\'")}', this)" 
+                    <button onclick="handleStartSpeaking('${item.id}', '${safeEn}', this)" 
                             class="w-full ${score >= 5 ? 'bg-green-500' : 'bg-indigo-600'} text-white py-3 rounded-2xl font-bold shadow-md active:scale-95 transition-all">
-                        🎤 ${score > 0 ? '再次挑戰 (Challenge Again)' : '開始口說'}
+                        🎤 ${score > 0 ? '再次挑戰 (Challenge)' : '開始口說'}
                     </button>
                 `;
                 container.appendChild(card);
@@ -379,7 +411,6 @@
         window.toggleLeaderboard = (show) => document.getElementById('leaderboard-modal').classList.toggle('hidden', !show);
         window.toggleFullScreen = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
 
-        // 禁止在登入按鈕前操作
         signInAnonymously(auth).then(user => {
             currentUser = user;
             document.getElementById('login-btn').innerText = "連線成功，請登入";
